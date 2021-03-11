@@ -189,7 +189,7 @@ int main(int argc, char **argv) {
 	printf("Width: %d\n", width);
 	printf("Document length: %lu\n", sb.used);
 
-	ww(width, fd_in, &sb);
+	ww(width, 1, &sb);
 
 	sb_destroy(sb.data);
 
