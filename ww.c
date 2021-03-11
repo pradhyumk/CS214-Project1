@@ -11,8 +11,6 @@ typedef struct {
     size_t length;
 	size_t used;
     char *data;
-
-	// h e l l o \0 _  _  _  _  
 } strbuff_t;
 
 void sb_destroy(char *L) {
@@ -49,7 +47,8 @@ int wordLength(int index, strbuff_t *sb){
 
 	int counter = index;
 	int length = 0;
-	while (counter <  sb->used){
+
+	while (counter <  sb->used-1){
 		
 		if (isspace(buffer[counter])) {
 			break;
@@ -62,78 +61,85 @@ int wordLength(int index, strbuff_t *sb){
     return length;
 }
 
-// \n  \n\n     hello world --
-//hello\n\t\t\nworld --
-//hello\n\n\t\t\n\nworld --
-//hello \n\t world --
-//hello --
-//hello      world
-
-/* 
- * hello
- * 
- * world
- * hello  \n world (w=8)
- */
-
-
 void ww(int width, int fd_in, strbuff_t *sb) {
 	int i = 0;	// array index
 	int characterUsed = 0; // Characters  in the current line
-	int whiteSpace = 0;
-	int wordLen;
+	int longWord = 0;
 
-	wordLen = wordLength(4, sb);
-	printf("Length of the word is: %d\n", wordLen);
+	while (i < sb->used-1) { // going through every character one by one
+		// printf("Character: %c\n", sb->data[i]);
 
-	while (i < sb->used) { // going through every character one by one
-		if (isspace(sb->data[i]) && characterUsed != 0) {	// checking for 2 or more lines at the start AND if the \n is not at the beggining for a sentence
-
+		if (isspace(sb->data[i])) {	// checking for 2 or more lines at the start AND if the \n is not at the beggining for a sentence
+			int newLine = 0;
 			int printed = 0; // to make sure we only print one para break
 
 			if (sb->data[i] == '\n') {
-				i++; // start from next character
-				
-				while (isspace(sb->data[i])) {
-					if (sb->data[i] == '\n' && printed == 0) { 	// saw two \n and printing a paragraph break
-						write(fd, "\n\n", 2);
-						characterUsed = 0;
-						printed = 1;
-						i++;
-					} else if (isspace(sb->data[i])) {
-						i++;
-					} 
-				}
+				newLine = 1;	
+			}
 
-			} else {
-				if (characterUsed == 0) { // if there is a whitepace at the begging of a line
+			i++; // start from next character
+			
+			while (i < sb->used-1 && isspace(sb->data[i])) {
+				if (sb->data[i] == '\n' && printed == 0 && newLine == 1) { 	// saw two \n and printing a paragraph break
+					write(fd_in, "\n\n", 2);
+					characterUsed = 0;
+					printed = 1;
+					i++;
+					newLine++;
+				} else if (isspace(sb->data[i])) {
 					i++;
 				} 
 			}
 
 			if (printed == 0) {
-				int nextword = wordLength(i, &sb);	// gettting the length of the word to see if it fits; it it fits, we print the space
-
-				if (nextword+1 <= width - characterUsed){
-					write(fd, " ", 1);
+				int nextword = wordLength(i, sb);	// gettting the length of the word to see if it fits; it it fits, we print the space
+				//printf("Char: %c | Next Start Index: %d | NextWordLength: %d | Width - CharUsed: %d\n",sb->data[i], i, nextword, width - characterUsed);
+				
+				if (nextword+1 <= width - characterUsed  && characterUsed != 0){
+					write(fd_in, " ", 1);
 					characterUsed++;
-				} else {
-					write(fd, "\n", 1);
+				} else if (i != sb->used - 1  && characterUsed != 0){
+					write(fd_in, "\n", 1);
+					// printf("Entered!\n");
 					characterUsed = 0;
+					longWord = 1;
 				}
 			}
 		} else if (!isspace(sb->data[i])){ // character
-
-
-			// print white space
-
-			while () { //starts at the current index and prints everything until it hits a whitespace
-
+			// printf("Passing in: %c\n", sb->data[i]);
+			int wordLen = wordLength(i, sb);
+			int tempCharacterUsed = characterUsed;
+			
+			if (characterUsed != 0 && wordLen > width - characterUsed) { // if the word fits, print it
+				if (longWord == 0) {	// came across a word that is longer that the width and havent printed a new line yet
+					write(fd_in, "\n", 1);
+				}
+			} 
+			// printf("Index: %d | %c\n", i, sb->data[i]);
+			while (i < sb->used-1 && !isspace(sb->data[i])) { //starts at the current index and prints everything until it hits a whitespace
+				write(fd_in, &sb->data[i], 1);
+				characterUsed++;
+				i++;
 			}
+
+			if (sb->data[i] == '\0') {
+				break;
+			}
+
+			if (wordLen > width - tempCharacterUsed && (sb->data[i] != '\n' && sb->data[i+1] != '\n')) { // if the word we just printed was too big, print a new line after that reset 
+				characterUsed = 0;
+				write(fd_in, "\n", 1);
+				// printf("Entered1!\n");
+				longWord = 0;
+			}
+ 
 		} else {
+			// int newLine = 0;
 			i++;
 		}
 	}
+
+	write(fd_in, "\n", 1);
 }
 
 
@@ -158,11 +164,14 @@ strbuff_t* charArray(int fd, strbuff_t *sb) {
 
 int main(int argc, char **argv) {
 
-	int fd = 0;
+	int fd_in = 0;
+	// int fd_out;
 	strbuff_t sb;
 	
-	if (argc == 3) {
-		fd = open(argv[2], O_RDONLY); 
+	if (argc == 3) { // either passed in a file or directory
+		fd_in = open(argv[2], O_RDONLY); 
+
+		
 	} else if (argc == 2) {
 		char c[] = "Please enter your text: \n";
 		write(1, c, sizeof(c)-1);
@@ -172,28 +181,17 @@ int main(int argc, char **argv) {
 
 	unsigned int width = atoi(argv[1]);
 	 
-	charArray(fd, &sb);
+	charArray(fd_in, &sb);
 	
-	printf("---------- Document Array ----------\n");
+	printf("\n---------- Document Array ----------\n");
 	printf("%s\n", sb.data);
 	printf("------------------------------------\n");
 	printf("Width: %d\n", width);
 	printf("Document length: %lu\n", sb.used);
 
-	ww(width, fd, &sb);
-
+	ww(width, fd_in, &sb);
 
 	sb_destroy(sb.data);
 
-
 	return EXIT_SUCCESS;
 }
-
-
-			// if ((i+1 < sb->used) && (sb->data[i+1] == '\n')) {
-			// 	while (!ispace(sb->data[i+1])) { // print a new line until you see that next character is not a character
-			// 		write(fd_in, )
-
-			// 		i += 2;
-			// 	}
-			// }
