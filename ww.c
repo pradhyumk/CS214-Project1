@@ -6,7 +6,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 
+int exceededPageWidth = 0;
 
 typedef struct {
     size_t length;
@@ -87,7 +89,6 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 	int longWord = 0;
 
 	while (i < sb->used-1) { // going through every character one by one
-		// printf("Character: %c\n", sb->data[i]);
 
 		if (isspace(sb->data[i])) {	// checking for 2 or more lines at the start AND if the \n is not at the beggining for a sentence
 			int newLine = 0;
@@ -117,20 +118,17 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 
 			if (printed == 0) {
 				int nextword = wordLength(i, sb);	// gettting the length of the word to see if it fits; it it fits, we print the space
-				//printf("Char: %c | Next Start Index: %d | NextWordLength: %d | Width - CharUsed: %d\n",sb->data[i], i, nextword, width - characterUsed);
 				
 				if (nextword+1 <= width - characterUsed  && characterUsed != 0){
 					write(fd_out, " ", 1);
 					characterUsed++;
 				} else if (i != sb->used - 1  && characterUsed != 0){
 					write(fd_out, "\n", 1);
-					// printf("Entered!\n");
 					characterUsed = 0;
 					longWord = 1;
 				}
 			}
 		} else if (!isspace(sb->data[i])){ // character
-			// printf("Passing in: %c\n", sb->data[i]);
 			int wordLen = wordLength(i, sb);
 			int tempCharacterUsed = characterUsed;
 			
@@ -139,7 +137,6 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 					write(fd_out, "\n", 1);
 				}
 			} 
-			// printf("Index: %d | %c\n", i, sb->data[i]);
 			while (i < sb->used-1 && !isspace(sb->data[i])) { //starts at the current index and prints everything until it hits a whitespace
 				write(fd_out, &sb->data[i], 1);
 				characterUsed++;
@@ -153,8 +150,8 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 			if (wordLen > width - tempCharacterUsed && (sb->data[i] != '\n' && sb->data[i+1] != '\n')) { // if the word we just printed was too big, print a new line after that reset 
 				characterUsed = 0;
 				write(fd_out, "\n", 1);
-				// printf("Entered1!\n");
 				longWord = 0;
+				exceededPageWidth = 1;
 			}
 
 			if (checkEndWhitespace(i, sb) == 0) {
@@ -197,15 +194,26 @@ int main(int argc, char **argv) {
 	
 	if (argc == 3) { // either passed in a file or directory
 		width = atoi(argv[1]);
+
+		if (width <= 0) {
+			return EXIT_FAILURE;
+		}
 		
 		struct stat file_stat;
 		if (stat(argv[2], &file_stat) != 0){
+			perror("Error");
 			return EXIT_FAILURE;
 		}
 
 		int dir_check = S_ISDIR(file_stat.st_mode); // 0 is File, 1 is Directory
+
 		if (dir_check == 0) { // just a regular file  was passed in
 			fd_in = open(argv[2], O_RDONLY);
+			if (fd_in == -1){
+				perror("Error");
+				return EXIT_FAILURE;
+			}
+
 			fd_out = 1;
 			
 			charArray(fd_in, &sb);
@@ -224,10 +232,13 @@ int main(int argc, char **argv) {
 
 				if (de->d_type == DT_REG && !(de->d_name[0] == '.') && !(strcmp("wrap.", temp) == 0)) {	
 					
-					char *path = malloc(sizeof(char) * (strlen(argv[2])+6));
+
+					char *path = malloc(sizeof(char) * (strlen(argv[2])+6+strlen(de->d_name)));
 
 					chdir(argv[2]);
 					strcpy(path,"wrap.");
+
+
 					strcat(path, de->d_name);
 
 
@@ -250,6 +261,10 @@ int main(int argc, char **argv) {
 		fd_out = 1;
 		width = atoi(argv[1]);
 
+		if (width <= 0) {
+			return EXIT_FAILURE;
+		}
+
 		charArray(fd_in, &sb);
 		ww(width, fd_in, fd_out, &sb);
 		sb_destroy(sb.data);
@@ -257,5 +272,8 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-	return EXIT_SUCCESS;
+	if (exceededPageWidth == 0)
+		return EXIT_SUCCESS;
+	else
+		return EXIT_FAILURE;
 }
