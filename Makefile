@@ -1,7 +1,7 @@
 all: ww
 
 ww: ww.c
-	gcc -g -std=c99 -Wvla -Wall -fsanitize=address,undefined ww.c -o ww.out
+	gcc -g -std=gnu99 -Wvla -Wall -fsanitize=address,undefined ww.c -o ww.out
 
 clean:
-	rm -f ww
+	rm -f ww.out

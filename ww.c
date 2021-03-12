@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 
 typedef struct {
@@ -209,38 +210,52 @@ int main(int argc, char **argv) {
 			
 			charArray(fd_in, &sb);
 			ww(width, fd_in, fd_out, &sb);
-			
+			sb_destroy(sb.data);
+			close(fd_in);
 		} else if (dir_check == 1) {	// a directory was passed in
+			
 			DIR *dirp = opendir(argv[2]);  
 			struct dirent *de;
 
 			while ((de = readdir(dirp))) {
+				char temp[6];
+				memcpy(temp, de->d_name, 5);
+				temp[5] = '\0';
 
+				if (de->d_type == DT_REG && !(de->d_name[0] == '.') && !(strcmp("wrap.", temp) == 0)) {	
+					
+					char *path = malloc(sizeof(char) * (strlen(argv[2])+6));
+
+					chdir(argv[2]);
+					strcpy(path,"wrap.");
+					strcat(path, de->d_name);
+
+
+					fd_in = open(de->d_name, O_RDONLY);
+					fd_out = open(path, O_CREAT|O_RDWR, 0600);
+
+					charArray(fd_in, &sb);
+					ww(width, fd_in, fd_out, &sb);
+					sb_destroy(sb.data);
+					free(path);
+					close(fd_out);
+				}
+				
    			}
-		
+			   
+			closedir(dirp);
 		}		
 	} else if (argc == 2) {
 		fd_in = 0;
 		fd_out = 1;
 		width = atoi(argv[1]);
-		
-		// char c[] = "Please enter your text: \n";
-		// write(1, c, sizeof(c)-1);
 
 		charArray(fd_in, &sb);
 		ww(width, fd_in, fd_out, &sb);
-
+		sb_destroy(sb.data);
 	} else {
 		return EXIT_FAILURE;
 	}
-	
-	// printf("\n---------- Document Array ----------\n");
-	// printf("%s\n", sb.data);
-	// printf("------------------------------------\n");
-	// printf("Width: %d\n", width);
-	// printf("Document length: %lu\n", sb.used);
-
-	sb_destroy(sb.data);
 
 	return EXIT_SUCCESS;
 }
