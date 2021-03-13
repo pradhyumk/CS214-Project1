@@ -87,6 +87,8 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 	int i = 0;	// array index
 	int characterUsed = 0; // Characters  in the current line
 	int longWord = 0;
+	int print = 0;
+	int firstPara = 0;
 
 	while (i < sb->used-1) { // going through every character one by one
 
@@ -94,7 +96,7 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 			int newLine = 0;
 			int printed = 0; // to make sure we only print one para break
 
-			if (sb->data[i] == '\n') {
+			if (sb->data[i] == '\n' && characterUsed != 0) {
 				newLine = 1;	
 			}
 
@@ -105,12 +107,34 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 					if (checkEndWhitespace(i, sb) == 0) {
 						break;
 					}
-		
-					write(fd_out, "\n\n", 2);
-					characterUsed = 0;
-					printed = 1;
-					i++;
+					
+					if (longWord == 0 && characterUsed != 0 && print == 1) {
+						write(fd_out, "\n", 1);
+						characterUsed = 0;
+						printed = 1;
+						i++;
+						newLine++;
+						print = 0;
+					} else if (characterUsed != 0) {
+						write(fd_out, "\n\n", 2);
+						characterUsed = 0;
+						printed = 1;
+						i++;
+						newLine++;
+					} else {
+						if (firstPara == 1) {
+							write(fd_out, "\n", 1);
+							characterUsed = 0;
+							printed = 1;
+							newLine++;
+							firstPara = 0;
+						}
+						i++;
+					}
+					
+				}  else if (sb->data[i] == '\n') {
 					newLine++;
+					i++;
 				} else if (isspace(sb->data[i])) {
 					i++;
 				} 
@@ -125,18 +149,20 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 				} else if (i != sb->used - 1  && characterUsed != 0){
 					write(fd_out, "\n", 1);
 					characterUsed = 0;
-					longWord = 1;
+					longWord = 1; // that we dont need to print a new line after since we just printed one
 				}
 			}
 		} else if (!isspace(sb->data[i])){ // character
 			int wordLen = wordLength(i, sb);
 			int tempCharacterUsed = characterUsed;
 			
-			if (characterUsed != 0 && wordLen > width - characterUsed) { // if the word fits, print it
+			if (characterUsed != 0 && wordLen > width - characterUsed) { 
 				if (longWord == 0) {	// came across a word that is longer that the width and havent printed a new line yet
+					print = 1;
 					write(fd_out, "\n", 1);
 				}
 			} 
+
 			while (i < sb->used-1 && !isspace(sb->data[i])) { //starts at the current index and prints everything until it hits a whitespace
 				write(fd_out, &sb->data[i], 1);
 				characterUsed++;
@@ -147,23 +173,27 @@ void ww(int width, int fd_in, int fd_out, strbuff_t *sb) {
 				break;
 			}
 
+			
 			if (wordLen > width - tempCharacterUsed && (sb->data[i] != '\n' && sb->data[i+1] != '\n')) { // if the word we just printed was too big, print a new line after that reset 
-				characterUsed = 0;
 				write(fd_out, "\n", 1);
+				characterUsed = 0;
 				longWord = 0;
 				exceededPageWidth = 1;
+				firstPara = 1;
 			}
 
 			if (checkEndWhitespace(i, sb) == 0) {
 				break;
 			}
+
+
 		} else {
 			// int newLine = 0;
 			i++;
 		}
 	}
 
-	write(fd_out, "\n", 1);
+	write(fd_out, "\n", 1); // ending output with a new line
 }
 
 
